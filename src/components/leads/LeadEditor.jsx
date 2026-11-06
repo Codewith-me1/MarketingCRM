@@ -1,11 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import * as FiIcons from 'react-icons/fi';
 import SafeIcon from '../../common/SafeIcon';
-import { stages } from '../../data/seed';
+import { leadSources, stages } from '../../data/seed';
 import { today } from '../../common/format';
 import { useCRM } from '../../data/CRMContext';
 
-const SOURCES = ['Website', 'LinkedIn', 'Referral', 'Google Ads', 'Webinar', 'Conference', 'Cold outreach', 'Import', 'Other'];
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function LeadEditor({ lead, existingLeads = [], onClose, onSave }) {
@@ -13,7 +12,8 @@ export default function LeadEditor({ lead, existingLeads = [], onClose, onSave }
   const [draft, setDraft] = useState(() => ({
     name: '', email: '', phone: '', whatsapp: '', company: '', location: '', source: 'Website', campaign: '',
     status: 'New', priority: 'Medium', budget: '', owner: displayName, notes: '', followUp: '', createdAt: today(),
-    ...lead
+    ...lead,
+    tagsText: (lead?.tags || []).join(', ')
   }));
   const [error, setError] = useState('');
   const owners = draft.owner && !ownerOptions.includes(draft.owner) ? [draft.owner, ...ownerOptions] : ownerOptions;
@@ -45,7 +45,9 @@ export default function LeadEditor({ lead, existingLeads = [], onClose, onSave }
       return;
     }
 
-    onSave({ ...draft, name, email, budget: Number(draft.budget) || 0 });
+    const { tagsText, ...rest } = draft;
+    const tags = [...new Set(tagsText.split(',').map(item => item.trim().toLowerCase()).filter(Boolean))];
+    onSave({ ...rest, name, email, tags, budget: Number(draft.budget) || 0 });
   };
 
   return (
@@ -57,12 +59,13 @@ export default function LeadEditor({ lead, existingLeads = [], onClose, onSave }
         </header>
         <div className="editor-grid">
           {field('Full name', 'name', 'text', true)}{field('Work email', 'email', 'email', true)}{field('Phone', 'phone', 'tel')}{field('WhatsApp', 'whatsapp', 'tel')}{field('Company', 'company')}{field('Location', 'location')}
-          <label className="field-label">Source<select value={draft.source} onChange={event => update('source', event.target.value)}>{SOURCES.map(item => <option key={item}>{item}</option>)}</select></label>
+          <label className="field-label">Source<select value={draft.source} onChange={event => update('source', event.target.value)}>{leadSources.map(item => <option key={item}>{item}</option>)}</select></label>
           <label className="field-label">Stage<select value={draft.status} onChange={event => update('status', event.target.value)}>{stages.map(item => <option key={item}>{item}</option>)}</select></label>
           {field('Campaign', 'campaign')}{field('Budget ($)', 'budget', 'number')}
           <label className="field-label">Priority<select value={draft.priority} onChange={event => update('priority', event.target.value)}>{['Low', 'Medium', 'High'].map(item => <option key={item}>{item}</option>)}</select></label>
-          <label className="field-label">Assigned to<select value={draft.owner} onChange={event => update('owner', event.target.value)}>{owners.map(item => <option key={item}>{item}</option>)}</select></label>
+          <label className="field-label">Assigned to<select value={draft.owner} onChange={event => update('owner', event.target.value)}><option value="">Unassigned</option>{owners.map(item => <option key={item}>{item}</option>)}</select></label>
           {field('Follow-up date', 'followUp', 'date')}
+          <label className="field-label">Tags<input value={draft.tagsText} onChange={event => update('tagsText', event.target.value)} placeholder="e.g. enterprise, webinar" /></label>
           <label className="field-label field-wide">Notes<textarea rows="3" value={draft.notes} onChange={event => update('notes', event.target.value)} placeholder="Add context for your next conversation..." /></label>
           {error && <p className="auth-feedback auth-error field-wide" role="alert">{error}</p>}
         </div>

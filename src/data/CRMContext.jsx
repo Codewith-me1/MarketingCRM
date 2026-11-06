@@ -1,5 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { initialData } from './seed';
+import { defaultAutomations, defaultTemplates, initialData } from './seed';
+import { processLeadChange, timelineEntry } from '../common/crm';
+import { claimFormSubmissions, submissionToLead } from '../supabase/formService';
 import { initials } from '../common/format';
 import supabase, { supabaseConfigError } from '../supabase/supabase';
 import { fetchWorkspace, saveWorkspace, subscribeToWorkspace } from '../supabase/crmService';
@@ -18,7 +20,7 @@ const THEME_KEY = 'northstar-crm-theme';
 const SAVE_DELAY_MS = 600;
 const SLOW_LOAD_MS = 15000;
 const FOCUS_REFRESH_MS = 30000;
-const COLLECTIONS = ['leads', 'campaigns', 'activities'];
+const COLLECTIONS = ['leads', 'campaigns', 'activities', 'companies', 'deals', 'products', 'invoices'];
 
 const cacheKey = userId => `northstar-crm-cache:${userId}`;
 
@@ -63,6 +65,9 @@ const normalize = payload => {
   COLLECTIONS.forEach(key => {
     if (!Array.isArray(next[key])) next[key] = [];
   });
+  // Workspaces created before templates/automations existed get the starter set.
+  if (!Array.isArray(next.templates)) next.templates = defaultTemplates;
+  if (!Array.isArray(next.automations)) next.automations = defaultAutomations;
   return next;
 };
 
@@ -117,6 +122,7 @@ export function CRMProvider({ children }) {
   const lastRefreshRef = useRef(0);
   const dataRef = useRef(data);
   const ownerRef = useRef(workspaceOwnerId);
+  const actorRef = useRef('');
   dataRef.current = data;
   ownerRef.current = workspaceOwnerId;
 
@@ -385,11 +391,51 @@ export function CRMProvider({ children }) {
     }
     dirtyRef.current = true;
     setSaveState('saving');
-    setData(current => ({
-      ...current,
-      [key]: typeof updater === 'function' ? updater(current[key]) : updater
-    }));
+    setData(current => {
+      const nextValue = typeof updater === 'function' ? updater(current[key]) : updater;
+      if (key !== 'leads') return { ...current, [key]: nextValue };
+      // Lead changes run timeline logging and workflow automations.
+      return { ...current, ...processLeadChange(current, nextValue, actorRef.current) };
+    });
   }, []);
+
+  // ---- Web form submissions -> leads ---------------------------------------------------
+  const importSubmissions = useCallback(async () => {
+    const ownerId = ownerRef.current;
+    if (!ownerId) return 0;
+    try {
+      const rows = await claimFormSubmissions(ownerId);
+      if (!rows.length) return 0;
+      const incoming = rows.map(submissionToLead).filter(lead => lead.email);
+      update('leads', list => {
+        const byEmail = new Map(list.map(lead => [lead.email?.toLowerCase(), lead]));
+        const fresh = [];
+        const repeat = new Map();
+        incoming.forEach(lead => {
+          const match = byEmail.get(lead.email);
+          if (match) repeat.set(match.id, lead);
+          else if (!fresh.some(item => item.email === lead.email)) fresh.push(lead);
+        });
+        const updated = list.map(lead => (repeat.has(lead.id)
+          ? { ...lead, timeline: [timelineEntry('form', `Submitted ${repeat.get(lead.id).formName || 'a web form'} again${repeat.get(lead.id).notes ? ` — ${repeat.get(lead.id).notes}` : ''}`, 'Web form'), ...(lead.timeline || [])] }
+          : lead));
+        return [...fresh, ...updated];
+      });
+      return incoming.length;
+    } catch (error) {
+      if (!/does not exist|schema cache|PGRST20/i.test(error?.message || '')) console.error('Unable to import form submissions:', error);
+      return 0;
+    }
+  }, [update]);
+
+  useEffect(() => {
+    if (workspaceStatus !== 'ready' || !workspaceOwnerId) return undefined;
+    importSubmissions();
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') importSubmissions();
+    }, 60000);
+    return () => window.clearInterval(timer);
+  }, [workspaceStatus, workspaceOwnerId, importSubmissions]);
 
   const signOut = useCallback(async () => {
     await flush();
@@ -412,6 +458,7 @@ export function CRMProvider({ children }) {
   const viewData = useMemo(() => ({ ...data, team: teamWithStats }), [data, teamWithStats]);
 
   const displayName = profile?.full_name || user?.user_metadata?.full_name || user?.email?.split('@')[0] || 'Account';
+  actorRef.current = displayName;
 
   const ownerOptions = useMemo(() => {
     const names = new Set(team.map(member => member.name).filter(Boolean));
@@ -450,11 +497,12 @@ export function CRMProvider({ children }) {
     signUp: signUpWithPassword,
     signOut,
     update,
-    refreshTeam
+    refreshTeam,
+    importSubmissions
   }), [
     viewData, teamWithStats, ownerOptions, displayName, theme, role, user, workspaceOwnerId, profile,
     authReady, workspaceStatus, loadError, slowLoad, retryLoad, recoveryMode, profileError, cloudError,
-    saveState, inviteMessage, globalSearch, signOut, update, refreshTeam
+    saveState, inviteMessage, globalSearch, signOut, update, refreshTeam, importSubmissions
   ]);
 
   return <CRMContext.Provider value={value}>{children}</CRMContext.Provider>;

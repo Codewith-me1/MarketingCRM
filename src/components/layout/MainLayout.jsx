@@ -1,5 +1,6 @@
-import React, { Suspense } from 'react';
-import { Outlet } from 'react-router-dom';
+import React, { Suspense, useEffect, useState } from 'react';
+import { Outlet, useLocation } from 'react-router-dom';
+import CommandPalette from '../search/CommandPalette';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import { useCRM } from '../../data/CRMContext';
@@ -9,12 +10,33 @@ const saveLabels = { saved: 'All changes saved', saving: 'Saving…', error: 'No
 export default function MainLayout() {
   const { role, cloudError, profileError, saveState, inviteMessage, clearInviteMessage } = useCRM();
   const visibleError = cloudError || profileError;
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const location = useLocation();
+
+  useEffect(() => { setMenuOpen(false); }, [location.pathname]);
+
+  // Ctrl/⌘+K toggles search anywhere; "/" opens it when not typing in a field.
+  useEffect(() => {
+    const onKey = event => {
+      const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(event.target.tagName) || event.target.isContentEditable;
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setSearchOpen(open => !open);
+      } else if (event.key === '/' && !typing) {
+        event.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   return (
     <div className="app-shell">
-      <Sidebar />
+      <Sidebar open={menuOpen} onNavigate={() => setMenuOpen(false)} />
       <div className="main-column">
-        <Header />
+        <Header onOpenSearch={() => setSearchOpen(true)} onToggleMenu={() => setMenuOpen(open => !open)} />
         <main className="page-scroll">
           <div className={`preview-banner${visibleError ? ' banner-error' : ''}`}>
             {visibleError
@@ -35,6 +57,7 @@ export default function MainLayout() {
           </div>
         </main>
       </div>
+      <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
     </div>
   );
 }

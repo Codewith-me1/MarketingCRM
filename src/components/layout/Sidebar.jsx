@@ -3,33 +3,40 @@ import { NavLink } from 'react-router-dom';
 import * as FiIcons from 'react-icons/fi';
 import SafeIcon from '../../common/SafeIcon';
 import { useCRM } from '../../data/CRMContext';
+import { appConfig } from '../../supabase/supabase';
+import { NAV_SECTIONS } from './navigation';
 
-const links = [
-  { label: 'Overview', to: '/', icon: FiIcons.FiGrid },
-  { label: 'Leads', to: '/leads', icon: FiIcons.FiTarget, count: true },
-  { label: 'Pipeline', to: '/pipeline', icon: FiIcons.FiGitBranch },
-  { label: 'Campaigns', to: '/campaigns', icon: FiIcons.FiSend },
-  { label: 'Contacts', to: '/contacts', icon: FiIcons.FiUsers },
-  { label: 'Activities', to: '/activities', icon: FiIcons.FiCheckSquare },
-  { label: 'Analytics', to: '/analytics', icon: FiIcons.FiBarChart2 },
-  { label: 'Team', to: '/team', icon: FiIcons.FiUserCheck, admin: true }
-];
+export default function Sidebar({ open, onNavigate }) {
+  const { data, role, team } = useCRM();
+  const counts = {
+    leads: data.leads.filter(item => !['Converted', 'Lost'].includes(item.status)).length,
+    tasks: data.activities.filter(item => !item.done).length
+  };
 
-export default function Sidebar() {
-  const { data, role } = useCRM();
   return (
-    <aside className="sidebar">
-      <NavLink to="/" className="brand-lockup"><span className="brand-mark"><SafeIcon icon={FiIcons.FiAperture} /></span><span><b>Northstar</b><small>MARKETING CRM</small></span></NavLink>
-      <div className="workspace-switch"><span className="workspace-avatar">N</span><span><b>Northstar Studio</b><small>Growth workspace</small></span><SafeIcon icon={FiIcons.FiChevronDown} /></div>
-      <div className="nav-caption">WORKSPACE</div>
-      <nav className="side-nav">
-        {links.filter(link => !link.admin || role === 'Admin').map(link => (
-          <NavLink key={link.to} to={link.to} end={link.to === '/'} className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
-            <SafeIcon icon={link.icon} /><span>{link.label}</span>{link.count && <small>{data.leads.filter(item => !['Converted', 'Lost'].includes(item.status)).length}</small>}
-          </NavLink>
-        ))}
-      </nav>
-      <div className="sidebar-bottom"><div className="plan-card"><span className="plan-icon"><SafeIcon icon={FiIcons.FiZap} /></span><b>Growth plan</b><p>You're making great progress.</p><div className="plan-progress"><i></i></div><small>72% of monthly lead limit</small></div><div className="sidebar-foot"><span className="online-dot"></span> All systems operational</div></div>
-    </aside>
+    <>
+      {open && <div className="sidebar-scrim" onClick={onNavigate} aria-hidden="true"></div>}
+      <aside className={`sidebar${open ? ' is-open' : ''}`} aria-label="Main navigation">
+        <NavLink to="/" className="brand-lockup" onClick={onNavigate}><span className="brand-mark"><SafeIcon icon={FiIcons.FiAperture} /></span><span><b>{appConfig.name.split(' ')[0]}</b><small>MARKETING CRM</small></span></NavLink>
+        <div className="workspace-switch"><span className="workspace-avatar">{appConfig.name[0]}</span><span><b>{appConfig.name}</b><small>{team.length} member{team.length === 1 ? '' : 's'} · {role}</small></span></div>
+        <nav className="side-nav">
+          {NAV_SECTIONS.map(section => {
+            const items = section.items.filter(link => !link.admin || role === 'Admin');
+            if (!items.length) return null;
+            return (
+              <div className="nav-section" key={section.caption}>
+                <div className="nav-caption">{section.caption}</div>
+                {items.map(link => (
+                  <NavLink key={link.to} to={link.to} end={link.to === '/'} onClick={onNavigate} className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}>
+                    <SafeIcon icon={link.icon} /><span>{link.label}</span>{link.count && counts[link.count] > 0 && <small>{counts[link.count]}</small>}
+                  </NavLink>
+                ))}
+              </div>
+            );
+          })}
+        </nav>
+        <div className="sidebar-foot"><span className="online-dot"></span> Synced with Supabase</div>
+      </aside>
+    </>
   );
 }

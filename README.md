@@ -1,6 +1,19 @@
 # Northstar CRM
 
-React + Vite CRM backed by Supabase (auth, team workspaces, invitations, live sync). Needs Node.js 18 or newer.
+React + Vite marketing CRM backed by Supabase (auth, team workspaces, invitations, live sync). Needs Node.js 18 or newer.
+
+## Features
+
+- **Global search** — press `Ctrl/⌘ + K` or `/` anywhere: leads, companies, deals, tasks, campaigns, invoices, templates, pages and quick actions.
+- **Leads** — lead scoring (hot/warm/cold), tags, filters and sorting, bulk email/tag/stage/export/delete, CSV import/export, and a profile with a timeline (notes, calls, meetings, emails), tasks, deals, and Call/WhatsApp/Email buttons.
+- **Companies** and **Contacts**, with the people, deals and invoices linked to each company.
+- **Deals** — drag-and-drop pipeline board or list view, win probability, weighted forecast, win rate; convert any lead to a deal.
+- **Calendar** — tasks, follow-ups, expected closes and invoice due dates.
+- **Email templates** — merge fields (`{{first_name}}`, `{{company}}`…), send to one lead or to everyone with a tag through your own mail app, and every email is logged on the lead's timeline.
+- **Web forms** — shareable links and an embed code for your website. Submissions become leads automatically.
+- **Automations** — rules such as "when a lead is created from Referral, set High priority, tag it, create a call task".
+- **Products** and **quotes & invoices** — line items, tax, discount, convert a quote to an invoice, mark paid, print/PDF, email.
+- **Team** — invite members, roles, remove members; the dashboard, analytics and lead pipeline.
 
 ## 1. Configure environment
 
@@ -23,6 +36,7 @@ In the Supabase dashboard → **SQL Editor**, run each file in `src/supabase/mig
 All files are safe to re-run. `20260602000600_fix_team_admin_and_invites.sql` is required for team management:
 it makes every workspace owner an Admin, adds invitation acceptance for existing accounts, member removal,
 and realtime sync.
+`20260602000700_add_lead_capture_forms.sql` is required for **Web forms** (public lead-capture forms).
 
 ### Supabase Auth settings
 
@@ -54,3 +68,18 @@ npm run preview    # preview the built site
 ```
 
 Upload `dist/` to any static host and set the same `VITE_*` variables in the host's build environment.
+
+## Deploying on Vercel
+
+`.env` is not committed to Git, so Vercel never sees it. Do these once:
+
+1. **Environment variables**: Project → Settings → Environment Variables. Add `VITE_SUPABASE_URL`,
+   `VITE_SUPABASE_ANON_KEY`, `VITE_APP_URL` (your public URL) and `VITE_APP_NAME` for **Production** and **Preview**, then redeploy.
+   Without them the site shows "Supabase is not configured".
+2. **Make the site public**: Project → Settings → **Deployment Protection** → turn **Vercel Authentication** off
+   (or set it to "Only Preview Deployments" and share the production domain). While it is on, every visitor is sent to the
+   Vercel login page before the app loads. This is a Vercel setting; no code change can bypass it.
+3. **Supabase redirect URLs**: in Supabase → Authentication → URL Configuration, set *Site URL* to the Vercel URL and add it to
+   *Redirect URLs*, so confirmation, password-reset and invitation links return to the app.
+
+`vercel.json` already configures the Vite build, the SPA fallback and long-term caching of hashed assets.
