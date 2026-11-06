@@ -34,7 +34,7 @@ export default function OutreachWidget() {
   }, { leads: 0, contacted: 0, read: 0, replied: 0, bounced: 0 });
   const replies = data.leads
     .filter(lead => lead.successai?.status === 'replied')
-    .sort((a, b) => String(b.successai.checkedAt).localeCompare(String(a.successai.checkedAt)))
+    .sort((a, b) => String(b.successai?.checkedAt || '').localeCompare(String(a.successai?.checkedAt || '')))
     .slice(0, 4);
 
   return (

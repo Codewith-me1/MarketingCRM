@@ -69,6 +69,8 @@ const normalize = payload => {
   if (!Array.isArray(next.templates)) next.templates = defaultTemplates;
   if (!Array.isArray(next.automations)) next.automations = defaultAutomations;
   if (!next.integrations || typeof next.integrations !== 'object' || Array.isArray(next.integrations)) next.integrations = {};
+  // Drop synced campaigns saved without an id by an earlier sync (they matched every lead).
+  next.campaigns = next.campaigns.filter(item => item && (item.provider !== 'successai' || item.externalId));
   return next;
 };
 

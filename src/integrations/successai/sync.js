@@ -50,13 +50,16 @@ export function pickDetailIds(campaigns, limit) {
 
 /** Upserts Success.ai campaigns into the CRM campaign list, keeping local budget/revenue edits. */
 export function mergeCampaigns(local, result, leads = []) {
+  // Defensive: never keep a Success.ai campaign without an id (an undefined id would match every lead).
+  local = local.filter(item => item.provider !== PROVIDER || item.externalId);
+  result = { ...result, campaigns: (result.campaigns || []).filter(item => item && item.id) };
   const byExternal = new Map(local.filter(item => item.provider === PROVIDER).map(item => [item.externalId, item]));
   const remoteIds = new Set(result.campaigns.map(item => item.id));
   const merged = result.campaigns.map(remote => {
     const existing = byExternal.get(remote.id);
     const detail = result.details?.[remote.id];
     const s = detail?.summary || {};
-    const linked = leads.filter(lead => lead.successai?.campaignId === remote.id);
+    const linked = leads.filter(lead => lead.successai?.campaignId && lead.successai.campaignId === remote.id);
     const base = existing || { id: uid(), provider: PROVIDER, externalId: remote.id, channel: 'Success.ai email', budget: 0, revenue: 0, status: 'Draft', leads: 0, conversions: 0, stats: null };
     return {
       ...base,
@@ -127,14 +130,16 @@ export function applyContactResults(leads, results, campaigns, settings = DEFAUL
         ? { ...lead, successai: { ...lead.successai, checkedAt } }
         : { ...lead, successai: { checkedAt, notFound: true } };
     }
-    const best = [...result.contacts].sort((a, b) => (STATUS_RANK[b.status] ?? 0) - (STATUS_RANK[a.status] ?? 0))[0];
+    const contacts = (result.contacts || []).filter(contact => contact.campaignId);
+    if (!contacts.length) return lead.successai?.campaignId ? { ...lead, successai: { ...lead.successai, checkedAt } } : { ...lead, successai: { checkedAt, notFound: true } };
+    const best = [...contacts].sort((a, b) => (STATUS_RANK[b.status] ?? 0) - (STATUS_RANK[a.status] ?? 0))[0];
     const previous = lead.successai || {};
     const updated = { ...lead, timeline: [...(lead.timeline || [])], tags: [...(lead.tags || [])] };
     const campaignName = nameOf(best.campaignId);
     updated.successai = {
       ...previous, notFound: false, campaignId: best.campaignId, campaignName,
       status: best.status, isRead: best.isRead, interested: best.interested, checkedAt,
-      campaigns: result.contacts.length
+      campaigns: contacts.length
     };
     if (!updated.campaign) updated.campaign = campaignName;
 

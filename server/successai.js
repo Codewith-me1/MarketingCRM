@@ -177,9 +177,36 @@ const requireId = value => {
   return id;
 };
 
+/** Pulls the id out of a value that may be an id string or a populated object ({ _id, id }). */
+const idOf = value => {
+  if (!value) return '';
+  if (typeof value === 'string' || typeof value === 'number') return String(value);
+  return String(value._id || value.id || value.campaignId || value.campaign_id || '');
+};
+
+/** Success.ai list responses come as a plain array or paginated ({ docs, hasNextPage, … }). */
+const listOf = data => {
+  if (Array.isArray(data)) return { items: data, hasNext: null };
+  if (data && typeof data === 'object') {
+    const items = data.docs || data.campaigns || data.items || data.results || data.data || [];
+    return { items: Array.isArray(items) ? items : [], hasNext: typeof data.hasNextPage === 'boolean' ? data.hasNextPage : null };
+  }
+  return { items: [], hasNext: false };
+};
+
+const normalizeCampaign = item => ({
+  id: idOf(item?._id || item?.id || item?.campaignId || item?.campaign_id),
+  name: String(item?.name || item?.campaignName || item?.title || 'Untitled campaign')
+});
+
+/** Field names only (never values), to diagnose an unexpected response shape. */
+const shapeOf = value => (Array.isArray(value)
+  ? `array of ${value.length}${value[0] && typeof value[0] === 'object' ? ` with fields [${Object.keys(value[0]).join(', ')}]` : ''}`
+  : value && typeof value === 'object' ? `object with fields [${Object.keys(value).join(', ')}]` : typeof value);
+
 const normalizeContact = contact => ({
-  campaignId: contact.campaign || contact.campaignId || '',
-  status: contact.status || 'not contacted',
+  campaignId: idOf(contact.campaign || contact.campaignId || contact.campaign_id),
+  status: String(contact.status || 'not contacted').toLowerCase(),
   isRead: Boolean(contact.isRead || contact.open),
   interested: Boolean(contact.interest_status),
   updatedAt: contact.updatedAt || contact.createdAt || null
@@ -223,10 +250,21 @@ const ACTIONS = {
     run: async ({ cfg, apiKey, params }) => {
       const campaigns = [];
       for (let page = 0; page < 3; page += 1) {
-        const batch = await successAi(cfg, apiKey, 'GET', '/v2/campaign/list', { query: { skip: page * 50, limit: 50 } });
-        if (!Array.isArray(batch) || !batch.length) break;
-        campaigns.push(...batch.map(item => ({ id: item._id, name: item.name })));
-        if (batch.length < 50) break;
+        const raw = await successAi(cfg, apiKey, 'GET', '/v2/campaign/list', { query: { skip: page * 50, limit: 50 } });
+        const { items, hasNext } = listOf(raw);
+        if (!items.length) {
+          if (page === 0 && raw && !Array.isArray(raw) && typeof raw === 'object' && !('docs' in raw)) {
+            throw new HttpError(502, `Unexpected campaign list format from Success.ai (${shapeOf(raw)}). Please share this message so the integration can be adjusted.`);
+          }
+          break;
+        }
+        const normalized = items.map(normalizeCampaign);
+        const valid = normalized.filter(item => item.id);
+        if (!valid.length) {
+          throw new HttpError(502, `Success.ai returned campaigns without an id (${shapeOf(items)}). Please share this message so the integration can be adjusted.`);
+        }
+        campaigns.push(...valid.filter(item => !campaigns.some(existing => existing.id === item.id)));
+        if (hasNext === false || (hasNext === null && items.length < 50)) break;
       }
       const maxDetails = Math.max(0, Math.min(Number(params.maxDetails) || 6, 15));
       const preferred = Array.isArray(params.detailIds) ? params.detailIds.filter(id => campaigns.some(item => item.id === id)) : [];
@@ -278,7 +316,10 @@ const ACTIONS = {
     run: async ({ cfg, apiKey, params }) => {
       const name = str(params.name, 120);
       if (!name) throw new HttpError(400, 'Campaign name is required.');
-      return successAi(cfg, apiKey, 'POST', '/v2/campaign/create', { body: { name, timezone: str(params.timezone, 60) || 'UTC' } });
+      const data = await successAi(cfg, apiKey, 'POST', '/v2/campaign/create', { body: { name, timezone: str(params.timezone, 60) || 'UTC' } });
+      const campaignId = idOf(data?.campaignId || data?._id || data?.id || data?.campaign);
+      if (!campaignId) throw new HttpError(502, `Campaign created, but Success.ai returned no id (${shapeOf(data)}). Click "Sync now" to load it.`);
+      return { campaignId };
     }
   },
 

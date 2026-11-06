@@ -194,7 +194,7 @@ export function SuccessAiProvider({ children }) {
 
   const updateSettings = useCallback(patch => setMeta(current => ({ settings: { ...DEFAULT_SETTINGS, ...(current.settings || {}), ...patch } })), [setMeta]);
 
-  const campaigns = useMemo(() => data.campaigns.filter(item => item.provider === 'successai'), [data.campaigns]);
+  const campaigns = useMemo(() => data.campaigns.filter(item => item.provider === 'successai' && item.externalId), [data.campaigns]);
 
   const value = useMemo(() => ({
     connection, loadConnection, syncing, notice, clearNotice: () => setNotice(null), meta, settings, rateLimited,

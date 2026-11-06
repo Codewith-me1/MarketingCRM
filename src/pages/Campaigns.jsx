@@ -141,7 +141,7 @@ function OutreachCampaigns({ onAddLeads }) {
     }
   };
 
-  const linkedLeads = id => data.leads.filter(lead => lead.successai?.campaignId === id);
+  const linkedLeads = id => (id ? data.leads.filter(lead => lead.successai?.campaignId === id) : []);
 
   return (
     <section className="page-content">
@@ -154,7 +154,7 @@ function OutreachCampaigns({ onAddLeads }) {
         {sai.campaigns.map(campaign => {
           const s = campaign.stats || {};
           const linked = linkedLeads(campaign.externalId);
-          const replies = linked.filter(lead => lead.successai.status === 'replied');
+          const replies = linked.filter(lead => lead.successai?.status === 'replied');
           return (
             <article className={`panel outreach-card${campaign.missing ? ' is-paused' : ''}`} key={campaign.id}>
               <div className="panel-heading">
