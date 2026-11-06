@@ -8,6 +8,9 @@ import { money } from '../../common/format';
 import { stages, dealStageProbability } from '../../data/seed';
 import { addDays, leadScore, scoreBand, timelineEntry, uid } from '../../common/crm';
 import EmailComposer from '../email/EmailComposer';
+import OutreachBadge from '../../integrations/successai/OutreachBadge';
+import AddToCampaignModal from '../../integrations/successai/AddToCampaignModal';
+import { useSuccessAi } from '../../integrations/successai/SuccessAiProvider';
 
 const TIMELINE_ICONS = {
   note: FiIcons.FiFileText, call: FiIcons.FiPhone, email: FiIcons.FiMail, meeting: FiIcons.FiUsers,
@@ -27,6 +30,9 @@ export default function LeadProfile({ leadId, onClose, onEdit }) {
   const [entryText, setEntryText] = useState('');
   const [tagInput, setTagInput] = useState('');
   const [composing, setComposing] = useState(false);
+  const [addingToCampaign, setAddingToCampaign] = useState(false);
+  const [checking, setChecking] = useState('');
+  const sai = useSuccessAi();
 
   if (!lead) return null;
 
@@ -104,6 +110,25 @@ export default function LeadProfile({ leadId, onClose, onEdit }) {
         </dl>
         {lead.notes && <p className="profile-notes">{lead.notes}</p>}
 
+        {sai?.connection.configured && (
+          <>
+            <h3 className="drawer-section">Success.ai outreach</h3>
+            <div className="outreach-panel">
+              {lead.successai?.campaignId
+                ? <div><OutreachBadge lead={lead} showCampaign /><small>Checked {lead.successai.checkedAt ? new Date(lead.successai.checkedAt).toLocaleString() : 'never'}{lead.successai.campaigns > 1 ? ` · in ${lead.successai.campaigns} campaigns` : ''}{lead.successai.pendingStatus ? ` · will set "${lead.successai.pendingStatus}" on next sync` : ''}</small></div>
+                : <small>{lead.successai?.notFound ? `Not found in any Success.ai campaign (checked ${new Date(lead.successai.checkedAt).toLocaleDateString()}).` : 'Not linked to a Success.ai campaign yet.'}</small>}
+              <span className="outreach-actions">
+                <button className="secondary-button" type="button" disabled={!lead.email || Boolean(checking)} onClick={async () => {
+                  setChecking('…');
+                  try { const [result] = await sai.checkLeads([lead]); setChecking(result?.found ? '' : 'Not in any campaign'); } catch (error) { setChecking(error.message); }
+                }}><SafeIcon icon={FiIcons.FiRefreshCw} /> Check now</button>
+                {sai.canManage && <button className="secondary-button" type="button" disabled={!lead.email} onClick={() => setAddingToCampaign(true)}><SafeIcon icon={FiIcons.FiSend} /> Add to campaign</button>}
+              </span>
+              {checking && checking !== '…' && <small className="field-hint">{checking}</small>}
+            </div>
+          </>
+        )}
+
         <h3 className="drawer-section">Tags</h3>
         <div className="tag-list">
           {(lead.tags || []).map(tag => (
@@ -157,6 +182,7 @@ export default function LeadProfile({ leadId, onClose, onEdit }) {
           {!(lead.timeline || []).length && <li className="field-hint">No history yet. Log a note, call or meeting above.</li>}
         </ol>
       </Drawer>
+      {addingToCampaign && <AddToCampaignModal leads={[lead]} onClose={() => setAddingToCampaign(false)} />}
       {composing && <EmailComposer recipients={[lead]} onClose={() => setComposing(false)} />}
     </>
   );

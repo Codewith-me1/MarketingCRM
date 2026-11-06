@@ -1,6 +1,7 @@
 import React, { Suspense, useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import CommandPalette from '../search/CommandPalette';
+import { SuccessAiProvider } from '../../integrations/successai/SuccessAiProvider';
 import Sidebar from './Sidebar';
 import Header from './Header';
 import { useCRM } from '../../data/CRMContext';
@@ -33,6 +34,7 @@ export default function MainLayout() {
   }, []);
 
   return (
+    <SuccessAiProvider>
     <div className="app-shell">
       <Sidebar open={menuOpen} onNavigate={() => setMenuOpen(false)} />
       <div className="main-column">
@@ -59,5 +61,6 @@ export default function MainLayout() {
       </div>
       <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
     </div>
+    </SuccessAiProvider>
   );
 }

@@ -1,0 +1,52 @@
+/* Success.ai integration */
+.integration-card { display: grid; gap: 12px; }
+.integration-card h2, .outreach-widget h2 { display: flex; align-items: center; gap: 8px; }
+.integration-logo { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 6px; background: linear-gradient(135deg, #2f6bff, #7a4dff); color: #fff; font: 800 11px Manrope, sans-serif; }
+.integration-connect { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.integration-connect input { flex: 1; min-width: 220px; height: 36px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); color: var(--text); padding: 0 10px; font-size: 11px; outline: none; }
+.integration-connect input:focus { border-color: #a89ef2; }
+.integration-connect .field-hint, .integration-connect .auth-feedback { flex-basis: 100%; }
+.integration-settings summary { cursor: pointer; font-size: 11px; font-weight: 600; color: #6558e8; padding: 4px 0; }
+.integration-settings .editor-grid { padding: 12px 0 0; }
+.integration-toggles { display: grid; gap: 8px; }
+.integration-toggles .check-label { align-items: flex-start; line-height: 1.4; }
+.spin { animation: auth-spin 1s linear infinite; }
+@media (prefers-reduced-motion: reduce) { .spin { animation: none; } }
+
+.outreach-card { display: flex; flex-direction: column; gap: 12px; }
+.outreach-card h2 { margin-top: 8px !important; }
+.outreach-progress { height: 6px; border-radius: 6px; background: var(--line); overflow: hidden; }
+.outreach-progress i { display: block; height: 100%; background: linear-gradient(90deg, #6558e8, #36b48a); border-radius: inherit; }
+.outreach-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0; }
+.outreach-stats dt { color: var(--muted); font-size: 9px; text-transform: uppercase; letter-spacing: .7px; }
+.outreach-stats dd { margin: 3px 0 0; font: 700 15px Manrope, sans-serif; color: var(--text); }
+.outreach-stats dd small { font: 600 9px 'DM Sans', sans-serif; color: #279575; }
+.outreach-widget-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 22px; margin-top: 16px; }
+.outreach-campaign-bars { display: grid; gap: 10px; margin-bottom: 8px; }
+.stage-row.outreach-bar { grid-template-columns: minmax(80px, 140px) 1fr 34px; }
+.stage-row.outreach-bar > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.stage-row.outreach-bar > div { height: 6px; background: var(--line); border-radius: 6px; }
+.stage-row.outreach-bar > div i { display: block; height: 100%; border-radius: inherit; background: #6558e8; }
+
+.stage-cell { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.outreach-badge { display: inline-flex; align-items: center; gap: 4px; font-size: 8px; font-weight: 600; border-radius: 20px; padding: 3px 7px; background: #eef3ff; color: #4a66c4; white-space: nowrap; }
+.outreach-badge em { font-style: normal; font-weight: 500; opacity: .85; }
+.outreach-contacted, .outreach-completed { background: #ecf4ff; color: #3f6fd0; }
+.outreach-replied { background: #e4f6ee; color: #1f8762; }
+.outreach-bounced, .outreach-unsubscribed { background: #ffecee; color: #c2475a; }
+.outreach-queued, .outreach-not-contacted { background: #f3f1ff; color: #6a5bd6; }
+:root[data-theme="dark"] .outreach-badge { filter: brightness(.85); }
+.outreach-panel { display: grid; gap: 8px; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: var(--surface-soft); }
+.outreach-panel > div { display: flex; flex-direction: column; gap: 5px; align-items: flex-start; }
+.outreach-panel small { color: var(--muted); font-size: 9px; }
+.outreach-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+.campaign-table .text-link { border: 0; background: none; padding: 0; cursor: pointer; }
+
+@media (max-width: 850px) {
+  .outreach-widget-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 600px) {
+  .outreach-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.page-content > .preview-banner { margin: 0; }

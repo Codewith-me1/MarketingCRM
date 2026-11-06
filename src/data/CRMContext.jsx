@@ -68,6 +68,7 @@ const normalize = payload => {
   // Workspaces created before templates/automations existed get the starter set.
   if (!Array.isArray(next.templates)) next.templates = defaultTemplates;
   if (!Array.isArray(next.automations)) next.automations = defaultAutomations;
+  if (!next.integrations || typeof next.integrations !== 'object' || Array.isArray(next.integrations)) next.integrations = {};
   return next;
 };
 
@@ -83,7 +84,7 @@ const describeError = error => {
     return 'The CRM database tables or functions are missing. Apply the SQL files in src/supabase/migrations in the Supabase SQL editor.';
   }
   if (/jwt|invalid api key/i.test(message)) {
-    return 'Supabase rejected the API key. Check VITE_SUPABASE_ANON_KEY in .env.';
+    return 'Supabase rejected the API key. Check VITE_SUPABASE_PUBLISHABLE_KEY in .env.';
   }
   return message || 'Workspace data could not be loaded.';
 };

@@ -11,6 +11,10 @@ import PageTitle from '../components/ui/PageTitle';
 import LeadEditor from '../components/leads/LeadEditor';
 import LeadProfile, { ScoreBadge } from '../components/leads/LeadProfile';
 import EmailComposer from '../components/email/EmailComposer';
+import OutreachBadge from '../integrations/successai/OutreachBadge';
+import AddToCampaignModal from '../integrations/successai/AddToCampaignModal';
+import { useSuccessAi } from '../integrations/successai/SuccessAiProvider';
+import { CONTACT_STATUS_LABELS } from '../integrations/successai/sync';
 
 const PAGE_SIZE = 10;
 const SORTS = {
@@ -34,6 +38,9 @@ export default function Leads() {
   const [editing, setEditing] = useState(null);
   const [profileId, setProfileId] = useState(null);
   const [emailing, setEmailing] = useState(null);
+  const [outreach, setOutreach] = useState('');
+  const [addingToCampaign, setAddingToCampaign] = useState(null);
+  const sai = useSuccessAi();
   const inputRef = useRef(null);
   const closeEditor = useCallback(() => setEditing(null), []);
 
@@ -60,11 +67,12 @@ export default function Leads() {
         return (!query || haystack.includes(query))
           && (status === 'All stages' || lead.status === status)
           && (!tag || (lead.tags || []).includes(tag))
-          && (!owner || (owner === '__none' ? !lead.owner : lead.owner === owner));
+          && (!owner || (owner === '__none' ? !lead.owner : lead.owner === owner))
+          && (!outreach || (outreach === '__none' ? !lead.successai?.campaignId : outreach === '__any' ? Boolean(lead.successai?.campaignId) : lead.successai?.campaignId && (lead.successai.status || 'queued') === outreach));
       })
       .map(lead => ({ ...lead, score: leadScore(lead, data.activities) }))
       .sort(SORTS[sort]);
-  }, [data.leads, data.activities, search, globalSearch, status, tag, owner, sort]);
+  }, [data.leads, data.activities, search, globalSearch, status, tag, owner, outreach, sort]);
 
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, pages);
@@ -151,6 +159,7 @@ export default function Leads() {
           <select className="soft-select" value={status} onChange={event => { setStatus(event.target.value); setPage(1); }} aria-label="Stage"><option>All stages</option>{stages.map(item => <option key={item}>{item}</option>)}</select>
           <select className="soft-select" value={tag} onChange={event => { setTag(event.target.value); setPage(1); }} aria-label="Tag"><option value="">All tags</option>{allTags.map(item => <option key={item} value={item}>#{item}</option>)}</select>
           <select className="soft-select" value={owner} onChange={event => { setOwner(event.target.value); setPage(1); }} aria-label="Owner"><option value="">All owners</option><option value="__none">Unassigned</option>{ownerOptions.map(item => <option key={item}>{item}</option>)}</select>
+          {sai?.connection.configured && <select className="soft-select" value={outreach} onChange={event => { setOutreach(event.target.value); setPage(1); }} aria-label="Outreach status"><option value="">All outreach</option><option value="__any">In a Success.ai campaign</option><option value="__none">Not in outreach</option>{Object.entries(CONTACT_STATUS_LABELS).filter(([key]) => key !== 'not contacted').map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select>}
           <select className="soft-select" value={sort} onChange={event => setSort(event.target.value)} aria-label="Sort"><option value="newest">Newest first</option><option value="score">Highest score</option><option value="budget">Largest budget</option><option value="followUp">Next follow-up</option><option value="name">Name A–Z</option></select>
           <input ref={inputRef} hidden type="file" accept=".csv,text/csv" onChange={importFile} />
         </div>
@@ -158,6 +167,7 @@ export default function Leads() {
           <div className="bulk-bar">
             <b>{selected.length} selected</b>
             <button className="secondary-button" type="button" onClick={() => setEmailing(selectedLeads)}><SafeIcon icon={FiIcons.FiMail} /> Email</button>
+            {sai?.connection.configured && <button className="secondary-button" type="button" onClick={() => setAddingToCampaign(selectedLeads)}><SafeIcon icon={FiIcons.FiSend} /> Success.ai</button>}
             <button className="secondary-button" type="button" onClick={bulkTag}><SafeIcon icon={FiIcons.FiTag} /> Add tag</button>
             <select className="soft-select" value="" onChange={event => bulkStage(event.target.value)} aria-label="Move to stage"><option value="">Move to stage…</option>{stages.map(item => <option key={item}>{item}</option>)}</select>
             <button className="secondary-button" type="button" onClick={() => exportRows(selectedLeads)}><SafeIcon icon={FiIcons.FiDownload} /> Export</button>
@@ -181,7 +191,7 @@ export default function Leads() {
                   <td><ScoreBadge score={lead.score} /></td>
                   <td><b className="table-strong">{lead.company || '—'}</b><small className="table-sub">{lead.location}</small></td>
                   <td>{lead.source}</td>
-                  <td><span className={`status-chip status-${lead.status.toLowerCase()}`}>{lead.status}</span></td>
+                  <td><span className="stage-cell"><span className={`status-chip status-${lead.status.toLowerCase()}`}>{lead.status}</span><OutreachBadge lead={lead} /></span></td>
                   <td><span className="tag-list compact">{(lead.tags || []).slice(0, 3).map(item => <span className="tag" key={item}>{item}</span>)}</span></td>
                   <td>{lead.budget ? `$${Number(lead.budget).toLocaleString()}` : '—'}</td>
                   <td>{lead.owner || 'Unassigned'}</td>
@@ -200,6 +210,7 @@ export default function Leads() {
       </section>
       {editing && <LeadEditor lead={editing.id ? editing : null} existingLeads={data.leads} onClose={closeEditor} onSave={saveLead} />}
       {profileId && <LeadProfile leadId={profileId} onClose={closeProfile} onEdit={openEditorFromProfile} />}
+      {addingToCampaign && <AddToCampaignModal leads={addingToCampaign} onClose={() => { setAddingToCampaign(null); setSelected([]); }} />}
       {emailing && <EmailComposer recipients={emailing} onClose={() => setEmailing(null)} />}
     </div>
   );

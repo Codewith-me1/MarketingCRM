@@ -97,6 +97,12 @@ export function processLeadChange(state, nextLeads, actor = '') {
       ? timelineEntry('system', `Lead created${lead.source ? ` from ${lead.source}` : ''}`, actor)
       : timelineEntry('stage', `Stage changed from ${before.status} to ${lead.status}`, actor));
 
+    // Two-way Success.ai sync: closing a lead in the CRM stops its outreach sequence.
+    const pushClosed = state.integrations?.successai?.settings?.pushClosedStatus !== false;
+    if (stageChanged && pushClosed && next.successai?.campaignId && ['Converted', 'Lost'].includes(next.status)) {
+      next.successai = { ...next.successai, pendingStatus: next.status === 'Converted' ? 'Closed' : 'Not Interested' };
+    }
+
     const trigger = created ? 'lead_created' : 'stage_changed';
     rules
       .filter(rule => rule.trigger === trigger && matches(rule, next))

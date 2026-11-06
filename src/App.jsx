@@ -6,6 +6,7 @@ import AccessScreen from './components/AccessScreen';
 import { updatePassword } from './supabase/authService';
 import './App.css';
 import './features.css';
+import './integrations/successai/successai.css';
 
 // Route-level code splitting keeps the first load small.
 const Dashboard = lazy(() => import('./pages/Dashboard'));

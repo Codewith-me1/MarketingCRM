@@ -6,6 +6,7 @@ import { useCRM } from '../data/CRMContext';
 import { money } from '../common/format';
 import PageTitle from '../components/ui/PageTitle';
 import StatCard from '../components/ui/StatCard';
+import OutreachWidget from '../integrations/successai/OutreachWidget';
 
 export default function Dashboard() {
   const { data, displayName } = useCRM();
@@ -29,6 +30,7 @@ export default function Dashboard() {
         <StatCard label="Conversions" value={converted.length + 24} change="+4.6%" icon={FiIcons.FiTrendingUp} tone="green" />
         <StatCard label="Campaign revenue" value={money(revenue)} change="+18.4%" icon={FiIcons.FiDollarSign} tone="amber" />
       </section>
+      <OutreachWidget />
       <section className="dashboard-grid">
         <article className="panel performance-panel"><div className="panel-heading"><div><h2>Lead performance</h2><p>Lead generation across the last 8 weeks</p></div><select className="soft-select" defaultValue="8 weeks"><option>8 weeks</option><option>30 days</option><option>90 days</option></select></div>
           <div className="chart-area"><div className="chart-y-labels"><span>200</span><span>150</span><span>100</span><span>50</span><span>0</span></div><div className="bar-chart">{[42, 56, 49, 74, 63, 82, 68, 94].map((height, index) => <div className="bar-group" key={index}><div className="bar bar-muted" style={{ height: `${height * .7}%` }}></div><div className="bar bar-primary" style={{ height: `${height}%` }}></div><small>{['Apr 21', 'Apr 28', 'May 5', 'May 12', 'May 19', 'May 26', 'Jun 2', 'Jun 9'][index]}</small></div>)}</div></div>
