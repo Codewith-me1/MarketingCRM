@@ -1,0 +1,79 @@
+/* Reset default styles */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+}
+
+:where(.app-shell, .access-screen) :is(
+  p,
+  small,
+  label,
+  button,
+  input,
+  select,
+  textarea,
+  th,
+  td,
+  a,
+  .eyebrow,
+  .workspace-switch,
+  .plan-card,
+  .sidebar-foot,
+  .global-search,
+  .preview-pill,
+  .role-switch,
+  .preview-banner,
+  .stat-label,
+  .stat-foot,
+  .panel-heading,
+  .text-link,
+  .chart-legend,
+  .source-row,
+  .activity-item,
+  .task-done,
+  .task-open,
+  .pipeline-total,
+  .stage-row,
+  .lead-summary,
+  .data-table,
+  .table-footer,
+  .status-chip,
+  .priority-label,
+  .kanban-column,
+  .kanban-card,
+  .task-row,
+  .analytics-bar-row,
+  .team-performance-row,
+  .role-warning,
+  .role-cards,
+  .role-note,
+  .role-tag,
+  .access-copy,
+  .demo-notice,
+  .access-footnote,
+  .art-copy,
+  .art-stat
+) {
+  font-size: max(14px, 1em);
+}
+
+.app-shell .data-table b {
+  font-size: 14px;
+}
