@@ -25,18 +25,43 @@ export class HttpError extends Error {
   }
 }
 
+/** Removes the quotes/whitespace/newlines that often sneak in when pasting into Vercel or .env. */
+const clean = value => String(value || '').trim().replace(/^(['"])([\s\S]*)\1$/, '$2').trim();
+
+const projectRef = url => /^https:\/\/([a-z0-9]+)\.supabase\.(co|in)/i.exec(url)?.[1] || '';
+
+/** Project ref encoded in a legacy JWT key, if any (new sb_ keys carry no ref). */
+const keyRef = key => {
+  if (!key.startsWith('eyJ')) return '';
+  try {
+    return JSON.parse(Buffer.from(key.split('.')[1], 'base64url').toString('utf8'))?.ref || '';
+  } catch {
+    return '';
+  }
+};
+
 const config = env => {
-  const url = (env.SUPABASE_URL || env.VITE_SUPABASE_URL || '').replace(/\/+$/, '');
+  const url = clean(env.SUPABASE_URL || env.VITE_SUPABASE_URL).replace(/\/+$/, '');
   // New Supabase secret key (sb_secret_…) preferred; the legacy service_role JWT still works as a fallback.
-  const serviceKey = (env.SUPABASE_SECRET_KEY || env.SUPABASE_SERVICE_ROLE_KEY || '').trim();
+  const secretVar = clean(env.SUPABASE_SECRET_KEY) ? 'SUPABASE_SECRET_KEY' : 'SUPABASE_SERVICE_ROLE_KEY';
+  const serviceKey = clean(env[secretVar]);
+  // Public key, used only to verify the caller's session (keeps that check independent of the secret key).
+  const publicKey = clean(env.SUPABASE_PUBLISHABLE_KEY || env.VITE_SUPABASE_PUBLISHABLE_KEY || env.VITE_SUPABASE_ANON_KEY);
   if (!url || !serviceKey) {
     throw new HttpError(503, 'The Success.ai integration is not set up on the server. Add SUPABASE_SECRET_KEY (Supabase → Project Settings → API Keys → Secret keys) to the server environment — Vercel → Settings → Environment Variables, or .env for local development — then redeploy/restart.', { code: 'SERVER_NOT_CONFIGURED' });
   }
   if (serviceKey.startsWith('sb_publishable_')) {
-    throw new HttpError(503, 'SUPABASE_SECRET_KEY contains a publishable key. Use a secret key (sb_secret_…) from Project Settings → API Keys.', { code: 'SERVER_NOT_CONFIGURED' });
+    throw new HttpError(503, `${secretVar} contains a publishable key. Use a secret key (sb_secret_…) from Project Settings → API Keys.`, { code: 'SERVER_NOT_CONFIGURED' });
   }
-  return { url, serviceKey, base: (env.SUCCESS_AI_BASE_URL || SUCCESS_AI_BASE).replace(/\/+$/, '') };
+  const urlRef = projectRef(url);
+  const secretRef = keyRef(serviceKey);
+  if (urlRef && secretRef && urlRef !== secretRef) {
+    throw new HttpError(503, `${secretVar} belongs to Supabase project "${secretRef}", but the app uses project "${urlRef}". Copy the secret key from the same project.`, { code: 'SERVER_KEY_INVALID' });
+  }
+  return { url, serviceKey, secretVar, publicKey, base: clean(env.SUCCESS_AI_BASE_URL || SUCCESS_AI_BASE).replace(/\/+$/, '') };
 };
+
+const UA = 'northstar-crm-server/1.0';
 
 /**
  * Headers that authenticate the server to Supabase.
@@ -46,17 +71,28 @@ const config = env => {
  */
 const serverHeaders = cfg => ({
   apikey: cfg.serviceKey,
-  'User-Agent': 'northstar-crm-server/1.0',
+  'User-Agent': UA,
   ...(cfg.serviceKey.startsWith('sb_') ? {} : { Authorization: `Bearer ${cfg.serviceKey}` })
 });
 
-// ---- Supabase (service role) helpers ---------------------------------------------------------
+const keyRejected = cfg => new HttpError(503, `Supabase rejected the server key (${cfg.secretVar}). In Supabase → Project Settings → API Keys, copy a secret key (sb_secret_…) from project "${projectRef(cfg.url) || cfg.url}", paste it into Vercel → Settings → Environment Variables without quotes or spaces, then redeploy. If you disabled legacy keys, the old service_role key no longer works.`, { code: 'SERVER_KEY_INVALID' });
+const isInvalidApiKey = body => /invalid api key/i.test(body?.message || body?.msg || '');
+
+// ---- Supabase helpers -------------------------------------------------------------------------
 async function supabaseUser(cfg, token) {
-  if (!token) throw new HttpError(401, 'Sign in to use the Success.ai integration.');
-  // apikey identifies the project; the Bearer token is the signed-in user's own JWT.
-  const res = await fetch(`${cfg.url}/auth/v1/user`, { headers: { apikey: cfg.serviceKey, 'User-Agent': 'northstar-crm-server/1.0', Authorization: `Bearer ${token}` } });
-  if (!res.ok) throw new HttpError(401, 'Your session has expired. Sign in again.');
-  return res.json();
+  if (!token) throw new HttpError(401, 'Sign in to use the Success.ai integration.', { code: 'SESSION_EXPIRED' });
+  // apikey only identifies the project; the Bearer token is the signed-in user's own JWT.
+  const tryKey = async apikey => {
+    const res = await fetch(`${cfg.url}/auth/v1/user`, { headers: { apikey, 'User-Agent': UA, Authorization: `Bearer ${token}` } });
+    const body = await res.json().catch(() => null);
+    return { res, body };
+  };
+  let { res, body } = await tryKey(cfg.publicKey || cfg.serviceKey);
+  if (!res.ok && isInvalidApiKey(body) && cfg.publicKey) ({ res, body } = await tryKey(cfg.serviceKey));
+  if (res.ok && body?.id) return body;
+  if (isInvalidApiKey(body)) throw keyRejected(cfg);
+  if (res.status >= 500) throw new HttpError(502, `Supabase Auth is unavailable (${res.status}). Try again shortly.`);
+  throw new HttpError(401, 'Your sign-in session is no longer valid. Sign out and sign in again.', { code: 'SESSION_EXPIRED' });
 }
 
 async function rest(cfg, path, init = {}) {
@@ -65,8 +101,13 @@ async function rest(cfg, path, init = {}) {
     headers: { ...serverHeaders(cfg), 'Content-Type': 'application/json', ...(init.headers || {}) }
   });
   const text = await res.text();
-  const body = text ? JSON.parse(text) : null;
+  let body = null;
+  try { body = text ? JSON.parse(text) : null; } catch { body = { message: text.slice(0, 200) }; }
   if (!res.ok) {
+    if (res.status === 401 && isInvalidApiKey(body)) throw keyRejected(cfg);
+    if (/permission denied/i.test(body?.message || '')) {
+      throw new HttpError(503, `${cfg.secretVar} is not a secret/service_role key (permission denied). Use the sb_secret_… key from Project Settings → API Keys.`, { code: 'SERVER_KEY_INVALID' });
+    }
     const missing = /does not exist|schema cache|PGRST20/i.test(body?.message || '');
     throw new HttpError(missing ? 503 : 500, missing
       ? 'The integration table is missing. Apply src/supabase/migrations/20260602000800_add_integration_secrets.sql in the Supabase SQL editor.'

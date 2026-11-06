@@ -8,10 +8,7 @@ export class SuccessAiError extends Error {
   }
 }
 
-/** Calls the server proxy (/api/successai); the Success.ai API key never reaches the browser. */
-export async function callSuccessAi(action, params = {}) {
-  const { data } = await supabase.auth.getSession();
-  const token = data?.session?.access_token;
+async function post(action, params, token) {
   let response;
   try {
     response = await fetch('/api/successai', {
@@ -30,4 +27,18 @@ export async function callSuccessAi(action, params = {}) {
   }
   if (!body.ok) throw new SuccessAiError(body.error, response.status, body.code);
   return body.data;
+}
+
+/** Calls the server proxy (/api/successai); the Success.ai API key never reaches the browser. */
+export async function callSuccessAi(action, params = {}) {
+  const { data } = await supabase.auth.getSession();
+  try {
+    return await post(action, params, data?.session?.access_token);
+  } catch (error) {
+    if (error.code !== 'SESSION_EXPIRED') throw error;
+    // The access token may have expired while the tab slept: refresh once and retry.
+    const { data: refreshed, error: refreshError } = await supabase.auth.refreshSession();
+    if (refreshError || !refreshed?.session) throw error;
+    return post(action, params, refreshed.session.access_token);
+  }
 }
